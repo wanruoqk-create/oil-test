@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>油样检测数据汇总</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <style>
+    :root {
+      --primary: #1a56db;
+      --primary-dark: #1e40af;
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --border: #e2e8f0;
+      --text: #1e293b;
+      --muted: #64748b;
+      --success: #059669;
+      --danger: #dc2626;
+      --danger-bg: #fef2f2;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 16px 12px 80px;
+    }
+    .container { max-width: 1000px; margin: 0 auto; }
+    header { text-align: center; margin-bottom: 16px; }
+    header h1 { font-size: 1.5rem; color: var(--primary); font-weight: 700; }
+    header p { color: var(--muted); font-size: 0.88rem; margin-top: 4px; }
+
+    .oil-tabs {
+      display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; justify-content: center;
+    }
+    .oil-tab {
+      padding: 10px 22px; border-radius: 999px; border: 2px solid var(--border);
+      background: #fff; font-weight: 600; font-size: 0.95rem; cursor: pointer; color: var(--muted);
+      transition: all 0.15s;
+    }
+    .oil-tab:hover { border-color: #93c5fd; color: var(--primary); }
+    .oil-tab.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+    .oil-tab .count {
+      display: inline-block; min-width: 18px; height: 18px; line-height: 18px;
+      border-radius: 9px; background: rgba(255,255,255,0.25); font-size: 0.75rem;
+      margin-left: 4px; padding: 0 5px;
+    }
+    .oil-tab:not(.active) .count { background: #e2e8f0; color: #475569; }
+
+    .toolbar {
+      display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 14px;
+    }
+    button {
+      cursor: pointer; border: none; border-radius: 8px; padding: 9px 18px;
+      font-size: 0.92rem; font-weight: 600; transition: background 0.15s, transform 0.08s;
+    }
+    button:active { transform: scale(0.97); }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-success:hover { background: #047857; }
+    .btn-secondary { background: #e2e8f0; color: #334155; }
+    .btn-secondary:hover { background: #cbd5e1; }
+    .btn-outline { background: #fff; color: var(--primary); border: 1.5px solid #93c5fd; }
+    .btn-outline:hover { background: #eff6ff; }
+    .btn-danger {
+      background: transparent; color: var(--danger); padding: 5px 10px;
+      font-size: 0.8rem; border: 1px solid #fecaca;
+    }
+    .btn-danger:hover { background: var(--danger-bg); }
+    .btn-sm { padding: 6px 12px; font-size: 0.82rem; }
+    .btn-block {
+      display: block; width: 100%; margin-top: 12px; padding: 12px;
+      border: 2px dashed #93c5fd; background: #eff6ff; color: var(--primary);
+      border-radius: 10px; font-size: 0.95rem;
+    }
+    .btn-block:hover { background: #dbeafe; }
+
+    .config-card, .history-card {
+      background: var(--card); border-radius: 12px; border: 1px solid var(--border);
+      padding: 14px 16px; margin-bottom: 14px;
+    }
+    .config-card h3, .history-card h3 {
+      font-size: 0.95rem; color: var(--primary); margin-bottom: 10px;
+      display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+    }
+    .config-items { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .config-tag {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: #f1f5f9; border: 1px solid var(--border); border-radius: 6px;
+      padding: 4px 8px 4px 10px; font-size: 0.82rem;
+    }
+    .config-tag .unit { color: var(--muted); font-size: 0.72rem; }
+    .config-tag .group-badge {
+      background: #dbeafe; color: #1d4ed8; font-size: 0.68rem;
+      padding: 1px 5px; border-radius: 4px; margin-left: 2px;
+    }
+    .config-tag button {
+      background: none; border: none; color: #94a3b8; padding: 0 2px;
+      font-size: 0.9rem; line-height: 1; cursor: pointer;
+    }
+    .config-tag button:hover { color: var(--danger); }
+    .add-item-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .add-item-row input {
+      padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.88rem;
+    }
+    .add-item-row input:focus { outline: none; border-color: var(--primary); }
+
+    .sample-card {
+      background: var(--card); border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      padding: 16px 18px; margin-bottom: 12px; border: 1px solid var(--border);
+    }
+    .sample-header {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;
+    }
+    .sample-header .index {
+      background: var(--primary); color: #fff; width: 26px; height: 26px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; flex-shrink: 0;
+    }
+    .sample-header input.name-input {
+      flex: 1; min-width: 160px; padding: 8px 12px; border: 1px solid var(--border);
+      border-radius: 8px; font-size: 0.98rem; font-weight: 600;
+    }
+    .sample-header input.name-input:focus {
+      outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,86,219,0.12);
+    }
+
+    .phase-label { font-size: 0.82rem; color: var(--muted); margin-bottom: 8px; font-weight: 500; }
+    .select-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    .select-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 14px; background: #f8fafc; border: 1.5px solid var(--border);
+      border-radius: 8px; cursor: pointer; font-size: 0.88rem; user-select: none;
+      transition: all 0.12s;
+    }
+    .select-chip:hover { border-color: #93c5fd; background: #f0f9ff; }
+    .select-chip.checked {
+      background: #eff6ff; border-color: var(--primary); color: var(--primary); font-weight: 600;
+    }
+    .select-chip .check-mark {
+      width: 16px; height: 16px; border: 2px solid #94a3b8; border-radius: 4px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      font-size: 11px; color: transparent;
+    }
+    .select-chip.checked .check-mark {
+      background: var(--primary); border-color: var(--primary); color: #fff;
+    }
+    .select-chip .unit { font-size: 0.72rem; color: var(--muted); font-weight: 400; }
+
+    .tests-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px;
+    }
+    .test-item {
+      display: flex; align-items: center; gap: 6px; padding: 8px 10px;
+      background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;
+    }
+    .test-item .item-name { font-size: 0.88rem; font-weight: 500; min-width: 80px; white-space: nowrap; }
+    .test-item .unit { color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
+    .test-item input[type="text"] {
+      flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--border);
+      border-radius: 6px; font-size: 0.9rem; background: #fff;
+    }
+    .test-item input[type="text"]:focus { outline: none; border-color: var(--primary); }
+
+    .test-group {
+      grid-column: 1 / -1;
+      background: #f8fafc; border-radius: 10px; border: 1px solid #e2e8f0; overflow: hidden;
+    }
+    .test-group-header {
+      padding: 10px 12px; font-size: 0.9rem; font-weight: 600; color: var(--primary);
+      background: #eff6ff; border-bottom: 1px solid #e2e8f0;
+    }
+    .sub-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 8px; padding: 10px 12px;
+    }
+    .sub-item {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 8px; background: #fff; border-radius: 6px; border: 1px solid #e2e8f0;
+    }
+    .sub-item .sub-name { font-size: 0.84rem; min-width: 70px; white-space: nowrap; }
+    .sub-item .unit { color: var(--muted); font-size: 0.7rem; }
+    .sub-item input[type="text"] {
+      flex: 1; min-width: 0; padding: 5px 7px; border: 1px solid var(--border);
+      border-radius: 6px; font-size: 0.86rem;
+    }
+    .sub-item input[type="text"]:focus { outline: none; border-color: var(--primary); }
+
+    .sample-actions {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center;
+    }
+
+    .empty-tip {
+      text-align: center; padding: 40px 20px; color: var(--muted);
+      background: var(--card); border-radius: 12px; border: 2px dashed var(--border);
+    }
+    .empty-tip p { margin-bottom: 14px; }
+    .save-hint { text-align: center; font-size: 0.78rem; color: #94a3b8; margin-top: 8px; }
+
+    .history-list { display: flex; flex-direction: column; gap: 8px; }
+    .history-item {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      padding: 10px 12px; background: #f8fafc; border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .history-item .h-info { flex: 1; min-width: 160px; }
+    .history-item .h-name { font-weight: 600; font-size: 0.92rem; }
+    .history-item .h-meta { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+    .history-item .h-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .history-empty { font-size: 0.85rem; color: #94a3b8; text-align: center; padding: 12px; }
+
+    .restore-banner {
+      display: none; background: #fef3c7; border: 1px solid #fbbf24; color: #92400e;
+      padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; font-size: 0.88rem;
+      align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+    }
+    .restore-banner.show { display: flex; }
+
+    .modal-mask {
+      display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.45);
+      z-index: 1000; align-items: center; justify-content: center; padding: 16px;
+    }
+    .modal-mask.show { display: flex; }
+    .modal {
+      background: #fff; border-radius: 12px; padding: 24px; width: 100%; max-width: 400px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+    }
+    .modal h3 { font-size: 1.1rem; margin-bottom: 14px; }
+    .modal input {
+      width: 100%; padding: 10px 12px; border: 1px solid var(--border);
+      border-radius: 8px; font-size: 1rem; margin-bottom: 16px;
+    }
+    .modal input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,86,219,0.12); }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+    #pdf-area { display: none; }
+
+    @media (max-width: 600px) {
+      header h1 { font-size: 1.25rem; }
+      .tests-grid { grid-template-columns: 1fr; }
+      .sample-header { flex-direction: column; align-items: stretch; }
+      .oil-tab { padding: 8px 14px; font-size: 0.88rem; }
+      .sub-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>油样检测数据汇总</h1>
+      <p>三大油类 · 项目可自定义并自动保存 · 支持历史记录回改再导出</p>
+    </header>
+
+    <div class="oil-tabs" id="oilTabs"></div>
+
+    <div class="restore-banner" id="restoreBanner">
+      <span id="restoreBannerText">正在编辑历史记录中的数据</span>
+      <button type="button" class="btn-secondary btn-sm" onclick="exitHistoryEdit()">退出历史编辑</button>
+    </div>
+
+    <div class="config-card" id="configCard">
+      <h3>
+        <span>当前油类检测项目（增删后自动保存）</span>
+        <button type="button" class="btn-secondary btn-sm" onclick="resetItems()">恢复默认项目</button>
+      </h3>
+      <div class="config-items" id="configItems"></div>
+      <div class="add-item-row">
+        <input type="text" id="newItemName" placeholder="新项目名称" style="width:140px" />
+        <input type="text" id="newItemUnit" placeholder="单位（可空）" style="width:110px" />
+        <button type="button" class="btn-outline btn-sm" onclick="addCustomItem()">＋ 添加项目</button>
+      </div>
+      <p class="save-hint">若项目名称/单位有更新，请点「恢复默认项目」同步最新默认项（自定义项会保留需手动处理）</p>
+    </div>
+
+    <div class="toolbar">
+      <button type="button" class="btn-success" onclick="openExportModal()">导出汇总 PDF</button>
+      <button type="button" class="btn-secondary btn-sm" onclick="clearCurrentSamples()">清空当前油类油样</button>
+      <button type="button" class="btn-outline btn-sm" onclick="toggleHistory()">历史记录</button>
+    </div>
+
+    <div class="history-card" id="historyPanel" style="display:none;">
+      <h3>
+        <span>导出历史记录</span>
+        <button type="button" class="btn-secondary btn-sm" onclick="clearHistory()">清空历史</button>
+      </h3>
+      <p style="font-size:0.8rem;color:var(--muted);margin-bottom:10px;">
+        点「恢复编辑」可回到当时填写的数据，修改后重新导出
+      </p>
+      <div class="history-list" id="historyList"></div>
+    </div>
+
+    <div id="samplesList"></div>
+    <div id="emptyTip" class="empty-tip" style="display:none">
+      <p>当前油类还没有油样</p>
+      <button type="button" class="btn-primary" onclick="addSample()">＋ 添加第一个油样</button>
+    </div>
+
+    <div id="bottomAdd" style="display:none; margin-top:8px;">
+      <button type="button" class="btn-block" onclick="addSample()">＋ 继续添加下一个油样</button>
+    </div>
+  </div>
+
+  <div class="modal-mask" id="exportModal">
+    <div class="modal">
+      <h3>填写委托方名称</h3>
+      <input type="text" id="clientName" placeholder="请输入委托方名称" />
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" onclick="closeExportModal()">取消</button>
+        <button type="button" class="btn-success" onclick="doExportPDF()">生成 PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="pdf-area"></div>
+
+  <script>
+    const STORAGE_KEY = 'oil_test_summary_v5';
+    const HISTORY_KEY = 'oil_test_history_v5';
+    const MAX_HISTORY = 30;
+
+    const DEFAULT_ITEMS = {
+      transformer: [
+        { key: 'moisture', name: '水分', unit: 'mg/L', type: 'simple' },
+        { key: 'acid_value', name: '酸值', unit: 'mgKOH/g', type: 'simple' },
+        { key: 'acid_number', name: '酸价', unit: 'mgKOH/g', type: 'simple' },
+        { key: 'dielectric', name: '介损', unit: '%（90℃）', type: 'simple' },
+        { key: 'loss_factor', name: '损耗因数', unit: '%', type: 'simple' },
+        { key: 'resistivity', name: '体积电阻率', unit: 'Ω·m', type: 'simple' },
+        { key: 'breakdown', name: '击穿电压', unit: 'kV', type: 'simple' },
+        { key: 'flash_point', name: '闪点（闭口）', unit: '℃', type: 'simple' },
+        { key: 'gas_content_pct', name: '油中含气量', unit: '%(V/V)', type: 'simple' },
+        {
+          key: 'gas_content_comp',
+          name: '油中含气量（组分）',
+          unit: '',
+          type: 'group',
+          children: [
+            { key: 'o2', name: '氧气 O₂', unit: 'μL/L' },
+            { key: 'n2', name: '氮气 N₂', unit: 'μL/L' },
+            { key: 'co_gas', name: '一氧化碳 CO', unit: 'μL/L' },
+            { key: 'co2_gas', name: '二氧化碳 CO₂', unit: 'μL/L' },
+            { key: 'gas_total_pct', name: '含气量总计', unit: '%(V/V)' },
+          ]
+        },
+        {
+          key: 'dga',
+          name: '溶解气体组分含量',
+          unit: '',
+          type: 'group',
+          children: [
+            { key: 'oil_gas_ratio', name: '油气比', unit: '' },
+            { key: 'h2', name: '氢气 H₂', unit: 'μL/L' },
+            { key: 'ch4', name: '甲烷 CH₄', unit: 'μL/L' },
+            { key: 'c2h4', name: '乙烯 C₂H₄', unit: 'μL/L' },
+            { key: 'c2h6', name: '乙烷 C₂H₆', unit: 'μL/L' },
+            { key: 'c2h2', name: '乙炔 C₂H₂', unit: 'μL/L' },
+            { key: 'total_hc', name: '总烃', unit: 'μL/L' },
+            { key: 'co', name: '一氧化碳 CO', unit: 'μL/L' },
+            { key: 'co2', name: '二氧化碳 CO₂', unit: 'μL/L' },
+          ]
+        },
+      ],
+      turbine: [
+        { key: 'viscosity', name: '运动粘度(40℃)', unit: 'mm²/s', type: 'simple' },
+        { key: 'acid_value', name: '酸值', unit: 'mgKOH/g', type: 'simple' },
+        { key: 'moisture', name: '水分', unit: 'mg/L', type: 'simple' },
+        { key: 'flash_point', name: '闪点（开口）', unit: '℃', type: 'simple' },
+        { key: 'demulsibility', name: '破乳化值', unit: 'min', type: 'simple' },
+        {
+          key: 'foam',
+          name: '泡沫特性',
+          unit: '',
+          type: 'group',
+          children: [
+            { key: 'foam_24', name: '24℃', unit: 'mL' },
+            { key: 'foam_93', name: '93.5℃', unit: 'mL' },
+            { key: 'foam_24_after', name: '后24℃', unit: 'mL' },
+          ]
+        },
+        { key: 'air_release', name: '空气释放值', unit: 'min', type: 'simple' },
+        { key: 'particle', name: '颗粒污染度', unit: '级', type: 'simple' },
+        { key: 'rpvot', name: '氧化安定性(旋转氧弹)', unit: 'min', type: 'simple' },
+        { key: 'density', name: '密度', unit: 'g/cm³', type: 'simple' },
+        { key: 'impurity', name: '机械杂质', unit: '%', type: 'simple' },
+        { key: 'color', name: '颜色/外观', unit: '', type: 'simple' },
+      ],
+      fireresistant: [
+        { key: 'appearance', name: '外观/颜色', unit: '', type: 'simple' },
+        { key: 'density', name: '密度(20℃)', unit: 'g/cm³', type: 'simple' },
+        { key: 'viscosity', name: '运动粘度(40℃)', unit: 'mm²/s', type: 'simple' },
+        { key: 'moisture', name: '水分', unit: 'mg/L', type: 'simple' },
+        { key: 'acid_value', name: '酸值', unit: 'mgKOH/g', type: 'simple' },
+        { key: 'flash_point', name: '闪点（开口）', unit: '℃', type: 'simple' },
+        { key: 'autoignition', name: '自燃点', unit: '℃', type: 'simple' },
+        { key: 'chlorine', name: '氯含量', unit: 'mg/kg', type: 'simple' },
+        { key: 'resistivity', name: '电阻率', unit: 'Ω·cm', type: 'simple' },
+        { key: 'particle', name: '颗粒污染度', unit: '级', type: 'simple' },
+        {
+          key: 'foam',
+          name: '泡沫特性',
+          unit: '',
+          type: 'group',
+          children: [
+            { key: 'foam_24', name: '24℃', unit: 'mL' },
+            { key: 'foam_93', name: '93.5℃', unit: 'mL' },
+            { key: 'foam_24_after', name: '后24℃', unit: 'mL' },
+          ]
+        },
+        { key: 'air_release', name: '空气释放值', unit: 'min', type: 'simple' },
+        { key: 'mineral_oil', name: '矿物油含量', unit: '%', type: 'simple' },
+      ]
+    };
+
+    const OIL_TYPES = [
+      { id: 'transformer', name: '变压器油' },
+      { id: 'turbine', name: '汽轮机油' },
+      { id: 'fireresistant', name: '抗燃油' },
+    ];
+
+    let currentType = 'transformer';
+    let items = {};
+    let samples = {};
+    let nextId = 1;
+    let history = [];
+    let editingHistoryId = null;
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const data = JSON.parse(raw);
+          if (data.items) items = data.items;
+          if (data.samples) samples = data.samples;
+          if (data.nextId) nextId = data.nextId;
+          if (data.currentType) currentType = data.currentType;
+          if (data.editingHistoryId) editingHistoryId = data.editingHistoryId;
+        }
+        const hRaw = localStorage.getItem(HISTORY_KEY);
+        if (hRaw) history = JSON.parse(hRaw);
+      } catch (e) { console.warn('load failed', e); }
+      OIL_TYPES.forEach(t => {
+        if (!items[t.id]) items[t.id] = JSON.parse(JSON.stringify(DEFAULT_ITEMS[t.id]));
+        if (!samples[t.id]) samples[t.id] = [];
+      });
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          items, samples, nextId, currentType, editingHistoryId
+        }));
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+      } catch (e) { console.warn('save failed', e); }
+    }
+
+    function createEmptyTests(type) {
+      const t = {};
+      items[type].forEach(item => {
+        if (item.type === 'group') {
+          t[item.key] = { checked: false, children: {} };
+          (item.children || []).forEach(c => { t[item.key].children[c.key] = ''; });
+        } else {
+          t[item.key] = { checked: false, value: '' };
+        }
+      });
+      return t;
+    }
+
+    function deepClone(obj) {
+      return JSON.parse(JSON.stringify(obj));
+    }
+
+    function saveToHistory(clientName) {
+      const entry = {
+        id: 'h_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        time: new Date().toISOString(),
+        clientName: clientName,
+        items: deepClone(items),
+        samples: deepClone(samples),
+        nextId: nextId
+      };
+      history.unshift(entry);
+      if (history.length > MAX_HISTORY) history = history.slice(0, MAX_HISTORY);
+      saveState();
+      renderHistory();
+    }
+
+    function restoreHistory(id) {
+      const entry = history.find(h => h.id === id);
+      if (!entry) { alert('找不到该历史记录'); return; }
+      if (!confirm(`恢复「${entry.clientName}」于 ${formatTime(entry.time)} 的数据？\n当前未导出的修改会被覆盖。`)) return;
+
+      items = deepClone(entry.items);
+      samples = deepClone(entry.samples);
+      nextId = entry.nextId || nextId;
+      editingHistoryId = id;
+      const withData = OIL_TYPES.find(t => samples[t.id] && samples[t.id].length > 0);
+      if (withData) currentType = withData.id;
+      saveState();
+      renderAll();
+      document.getElementById('historyPanel').style.display = 'none';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function deleteHistory(id) {
+      if (!confirm('确定删除这条历史记录？')) return;
+      history = history.filter(h => h.id !== id);
+      if (editingHistoryId === id) editingHistoryId = null;
+      saveState();
+      renderHistory();
+      updateRestoreBanner();
+    }
+
+    function clearHistory() {
+      if (history.length === 0) return;
+      if (!confirm('确定清空全部历史记录？')) return;
+      history = [];
+      editingHistoryId = null;
+      saveState();
+      renderHistory();
+      updateRestoreBanner();
+    }
+
+    function exitHistoryEdit() {
+      editingHistoryId = null;
+      saveState();
+      updateRestoreBanner();
+    }
+
+    function formatTime(iso) {
+      try {
+        const d = new Date(iso);
+        return d.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+      } catch (e) { return iso; }
+    }
+
+    function countSamplesInEntry(entry) {
+      let n = 0;
+      OIL_TYPES.forEach(t => {
+        if (entry.samples && entry.samples[t.id]) n += entry.samples[t.id].length;
+      });
+      return n;
+    }
+
+    function toggleHistory() {
+      const panel = document.getElementById('historyPanel');
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+      if (panel.style.display === 'block') renderHistory();
+    }
+
+    function renderHistory() {
+      const list = document.getElementById('historyList');
+      if (history.length === 0) {
+        list.innerHTML = '<div class="history-empty">暂无导出历史</div>';
+        return;
+      }
+      list.innerHTML = history.map(h => {
+        const isEditing = editingHistoryId === h.id;
+        return `
+          <div class="history-item" style="${isEditing ? 'border-color:#fbbf24;background:#fffbeb;' : ''}">
+            <div class="h-info">
+              <div class="h-name">${escapeAttr(h.clientName)}${isEditing ? ' <span style="color:#d97706;font-size:0.75rem;">（当前编辑中）</span>' : ''}</div>
+              <div class="h-meta">${formatTime(h.time)} · ${countSamplesInEntry(h)} 个油样</div>
+            </div>
+            <div class="h-actions">
+              <button type="button" class="btn-primary btn-sm" onclick="restoreHistory('${h.id}')">恢复编辑</button>
+              <button type="button" class="btn-danger" onclick="deleteHistory('${h.id}')">删除</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function updateRestoreBanner() {
+      const banner = document.getElementById('restoreBanner');
+      if (editingHistoryId) {
+        const entry = history.find(h => h.id === editingHistoryId);
+        const name = entry ? entry.clientName : '';
+        document.getElementById('restoreBannerText').textContent =
+          `正在编辑历史记录：${name}（修改后重新导出即可）`;
+        banner.classList.add('show');
+      } else {
+        banner.classList.remove('show');
+      }
+    }
+
+    function switchType(typeId) {
+      currentType = typeId;
+      saveState();
+      renderTabs();
+      renderConfig();
+      renderSamples();
+    }
+
+    function renderTabs() {
+      document.getElementById('oilTabs').innerHTML = OIL_TYPES.map(t => {
+        const count = samples[t.id] ? samples[t.id].length : 0;
+        return `<button type="button" class="oil-tab ${t.id === currentType ? 'active' : ''}"
+          onclick="switchType('${t.id}')">${t.name}${count ? `<span class="count">${count}</span>` : ''}</button>`;
+      }).join('');
+    }
+
+    function renderConfig() {
+      const list = document.getElementById('configItems');
+      const cur = items[currentType] || [];
+      if (cur.length === 0) {
+        list.innerHTML = '<span style="color:#94a3b8;font-size:0.85rem;">暂无项目，请添加</span>';
+        return;
+      }
+      list.innerHTML = cur.map((item, idx) => `
+        <span class="config-tag">
+          ${item.name}${item.unit ? ` <span class="unit">${item.unit}</span>` : ''}
+          ${item.type === 'group' ? '<span class="group-badge">含子项</span>' : ''}
+          <button type="button" title="删除" onclick="removeItem(${idx})">×</button>
+        </span>
+      `).join('');
+    }
+
+    function addCustomItem() {
+      const nameEl = document.getElementById('newItemName');
+      const unitEl = document.getElementById('newItemUnit');
+      const name = nameEl.value.trim();
+      if (!name) { alert('请输入项目名称'); nameEl.focus(); return; }
+      const unit = unitEl.value.trim();
+      const key = 'custom_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+      items[currentType].push({ key, name, unit, type: 'simple' });
+      samples[currentType].forEach(s => { s.tests[key] = { checked: false, value: '' }; });
+      nameEl.value = ''; unitEl.value = '';
+      saveState(); renderConfig(); renderSamples();
+    }
+
+    function removeItem(idx) {
+      const item = items[currentType][idx];
+      if (!confirm(`确定删除项目「${item.name}」？已填数据也会消失。`)) return;
+      const key = item.key;
+      items[currentType].splice(idx, 1);
+      samples[currentType].forEach(s => { delete s.tests[key]; });
+      saveState(); renderConfig(); renderSamples();
+    }
+
+    function resetItems() {
+      if (!confirm('恢复为该油类的默认检测项目？将同步最新单位与子项顺序。')) return;
+      items[currentType] = JSON.parse(JSON.stringify(DEFAULT_ITEMS[currentType]));
+      samples[currentType].forEach(s => {
+        const old = s.tests;
+        s.tests = createEmptyTests(currentType);
+        items[currentType].forEach(item => {
+          if (old[item.key]) {
+            if (item.type === 'group' && old[item.key].children) {
+              s.tests[item.key].checked = !!old[item.key].checked;
+              item.children.forEach(c => {
+                if (old[item.key].children[c.key] !== undefined) {
+                  s.tests[item.key].children[c.key] = old[item.key].children[c.key];
+                }
+              });
+            } else if (item.type === 'simple') {
+              s.tests[item.key] = { checked: !!old[item.key].checked, value: old[item.key].value || '' };
+            }
+          }
+        });
+        if (s.phase === 'fill') {
+          const any = items[currentType].some(it => s.tests[it.key] && s.tests[it.key].checked);
+          if (!any) s.phase = 'select';
+        }
+      });
+      saveState(); renderConfig(); renderSamples();
+    }
+
+    function addSample() {
+      if (!items[currentType] || items[currentType].length === 0) {
+        alert('请先添加至少一个检测项目');
+        return;
+      }
+      const id = nextId++;
+      samples[currentType].push({
+        id, name: '', phase: 'select', tests: createEmptyTests(currentType)
+      });
+      saveState(); renderTabs(); renderSamples();
+      setTimeout(() => {
+        const el = document.querySelector(`#sample-${id} .name-input`);
+        if (el) { el.focus(); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+      }, 50);
+    }
+
+    function removeSample(id) {
+      if (!confirm('确定删除这个油样吗？')) return;
+      samples[currentType] = samples[currentType].filter(s => s.id !== id);
+      saveState(); renderTabs(); renderSamples();
+    }
+
+    function updateName(id, value) {
+      const s = samples[currentType].find(x => x.id === id);
+      if (s) { s.name = value; saveState(); }
+    }
+
+    function toggleSelect(id, key) {
+      const s = samples[currentType].find(x => x.id === id);
+      if (!s) return;
+      if (!s.tests[key]) {
+        const item = items[currentType].find(i => i.key === key);
+        if (!item) return;
+        if (item.type === 'group') {
+          s.tests[key] = { checked: false, children: {} };
+          (item.children || []).forEach(c => { s.tests[key].children[c.key] = ''; });
+        } else {
+          s.tests[key] = { checked: false, value: '' };
+        }
+      }
+      s.tests[key].checked = !s.tests[key].checked;
+      if (!s.tests[key].checked) {
+        if (s.tests[key].children) {
+          Object.keys(s.tests[key].children).forEach(k => { s.tests[key].children[k] = ''; });
+        } else {
+          s.tests[key].value = '';
+        }
+      }
+      saveState();
+      renderSampleCard(id);
+    }
+
+    function confirmSelect(id) {
+      const s = samples[currentType].find(x => x.id === id);
+      if (!s) return;
+      const any = items[currentType].some(it => s.tests[it.key] && s.tests[it.key].checked);
+      if (!any) { alert('请至少勾选一个检测项目'); return; }
+      s.phase = 'fill';
+      saveState();
+      renderSampleCard(id);
+    }
+
+    function backToSelect(id) {
+      const s = samples[currentType].find(x => x.id === id);
+      if (!s) return;
+      s.phase = 'select';
+      saveState();
+      renderSampleCard(id);
+    }
+
+    function updateValue(id, key, value) {
+      const s = samples[currentType].find(x => x.id === id);
+      if (s && s.tests[key] && s.tests[key].value !== undefined) {
+        s.tests[key].value = value;
+        saveState();
+      }
+    }
+
+    function updateChildValue(id, parentKey, childKey, value) {
+      const s = samples[currentType].find(x => x.id === id);
+      if (s && s.tests[parentKey] && s.tests[parentKey].children) {
+        s.tests[parentKey].children[childKey] = value;
+        saveState();
+      }
+    }
+
+    function clearCurrentSamples() {
+      if (!samples[currentType] || samples[currentType].length === 0) return;
+      if (!confirm('确定清空当前油类的所有油样？')) return;
+      samples[currentType] = [];
+      saveState(); renderTabs(); renderSamples();
+    }
+
+    function escapeAttr(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    function renderSampleCard(id) {
+      const s = samples[currentType].find(x => x.id === id);
+      if (!s) return;
+      const idx = samples[currentType].findIndex(x => x.id === id);
+      const html = buildSampleHTML(s, idx);
+      const el = document.getElementById('sample-' + id);
+      if (el) el.outerHTML = html;
+      else renderSamples();
+    }
+
+    function buildSampleHTML(s, idx) {
+      const curItems = items[currentType] || [];
+      let body = '';
+
+      if (s.phase !== 'fill') {
+        body += '<div class="phase-label">① 点击勾选本油样需要检测的项目，然后点「确认并填写」</div>';
+        body += '<div class="select-grid">';
+        curItems.forEach(item => {
+          const t = s.tests[item.key];
+          const checked = t && t.checked;
+          body += `
+            <div class="select-chip ${checked ? 'checked' : ''}" data-id="${s.id}" data-key="${item.key}" role="button">
+              <span class="check-mark">${checked ? '✓' : ''}</span>
+              ${item.name}
+              ${item.unit ? `<span class="unit">${item.unit}</span>` : ''}
+              ${item.type === 'group' ? '<span class="unit">（含子项）</span>' : ''}
+            </div>
+          `;
+        });
+        body += '</div>';
+        body += `
+          <div class="sample-actions">
+            <button type="button" class="btn-primary btn-sm" onclick="confirmSelect(${s.id})">确认并填写数据 →</button>
+            <button type="button" class="btn-danger" onclick="removeSample(${s.id})">删除此油样</button>
+          </div>
+        `;
+      } else {
+        body += `<div class="phase-label">② 填写检测结果 <button type="button" class="btn-outline btn-sm" style="margin-left:8px" onclick="backToSelect(${s.id})">← 重新选择项目</button></div>`;
+        body += '<div class="fill-area"><div class="tests-grid">';
+        curItems.forEach(item => {
+          const t = s.tests[item.key];
+          if (!t || !t.checked) return;
+          if (item.type === 'group') {
+            const childInputs = (item.children || []).map(c => {
+              const val = (t.children && t.children[c.key]) || '';
+              return `
+                <div class="sub-item">
+                  <span class="sub-name">${c.name}</span>
+                  ${c.unit ? `<span class="unit">${c.unit}</span>` : ''}
+                  <input type="text" value="${escapeAttr(val)}" placeholder="填结果"
+                    oninput="updateChildValue(${s.id}, '${item.key}', '${c.key}', this.value)" />
+                </div>
+              `;
+            }).join('');
+            body += `
+              <div class="test-group">
+                <div class="test-group-header">${item.name}</div>
+                <div class="sub-grid">${childInputs}</div>
+              </div>
+            `;
+          } else {
+            body += `
+              <div class="test-item">
+                <span class="item-name">${item.name}</span>
+                ${item.unit ? `<span class="unit">${item.unit}</span>` : ''}
+                <input type="text" value="${escapeAttr(t.value)}" placeholder="填结果"
+                  oninput="updateValue(${s.id}, '${item.key}', this.value)" />
+              </div>
+            `;
+          }
+        });
+        body += '</div></div>';
+        body += `
+          <div class="sample-actions">
+            <button type="button" class="btn-danger" onclick="removeSample(${s.id})">删除此油样</button>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="sample-card" id="sample-${s.id}">
+          <div class="sample-header">
+            <div class="index">${idx + 1}</div>
+            <input class="name-input" type="text"
+              value="${escapeAttr(s.name)}"
+              placeholder="油样名称，例如：1号主变"
+              oninput="updateName(${s.id}, this.value)" />
+          </div>
+          ${body}
+        </div>
+      `;
+    }
+
+    function renderSamples() {
+      const list = document.getElementById('samplesList');
+      const tip = document.getElementById('emptyTip');
+      const bottomAdd = document.getElementById('bottomAdd');
+      const curSamples = samples[currentType] || [];
+
+      if (curSamples.length === 0) {
+        list.innerHTML = '';
+        tip.style.display = 'block';
+        bottomAdd.style.display = 'none';
+        return;
+      }
+      tip.style.display = 'none';
+      bottomAdd.style.display = 'block';
+      list.innerHTML = curSamples.map((s, idx) => buildSampleHTML(s, idx)).join('');
+    }
+
+    function renderAll() {
+      renderTabs();
+      renderConfig();
+      renderSamples();
+      updateRestoreBanner();
+      renderHistory();
+    }
+
+    document.getElementById('samplesList').addEventListener('click', function (e) {
+      const chip = e.target.closest('.select-chip');
+      if (!chip) return;
+      const id = parseInt(chip.getAttribute('data-id'), 10);
+      const key = chip.getAttribute('data-key');
+      if (id && key) toggleSelect(id, key);
+    });
+
+    function openExportModal() {
+      const hasAny = OIL_TYPES.some(t => samples[t.id] && samples[t.id].length > 0);
+      if (!hasAny) { alert('请先添加至少一个油样'); return; }
+      const hasData = OIL_TYPES.some(t => hasAnyData(t.id));
+      if (!hasData) { alert('请至少勾选并填写一项检测数据'); return; }
+
+      let defaultName = '';
+      if (editingHistoryId) {
+        const entry = history.find(h => h.id === editingHistoryId);
+        if (entry) defaultName = entry.clientName || '';
+      }
+      document.getElementById('clientName').value = defaultName;
+      document.getElementById('exportModal').classList.add('show');
+      setTimeout(() => document.getElementById('clientName').focus(), 100);
+    }
+
+    function closeExportModal() {
+      document.getElementById('exportModal').classList.remove('show');
+    }
+
+    function hasAnyData(typeId) {
+      const list = samples[typeId] || [];
+      return list.some(s => {
+        return Object.keys(s.tests || {}).some(k => {
+          const t = s.tests[k];
+          if (!t || !t.checked) return false;
+          if (t.children) return Object.values(t.children).some(v => String(v).trim());
+          return String(t.value || '').trim();
+        });
+      });
+    }
+
+    function collectColumns(typeId) {
+      const curSamples = samples[typeId] || [];
+      const curItems = items[typeId] || [];
+      const normal = [];
+      const gasRelated = [];
+
+      curItems.forEach(item => {
+        const anyChecked = curSamples.some(s => s.tests[item.key] && s.tests[item.key].checked);
+        if (!anyChecked) return;
+        const isGas = item.key === 'gas_content_pct' || item.key === 'gas_content_comp' || item.key === 'dga';
+        if (item.type === 'group') {
+          (item.children || []).forEach(c => {
+            const col = { key: c.key, name: c.name, unit: c.unit, parentKey: item.key, parentName: item.name };
+            if (isGas) gasRelated.push(col); else normal.push(col);
+          });
+        } else {
+          const col = { key: item.key, name: item.name, unit: item.unit };
+          if (isGas) gasRelated.push(col); else normal.push(col);
+        }
+      });
+      return normal.concat(gasRelated);
+    }
+
+    function buildSectionHTML(typeId) {
+      const typeName = OIL_TYPES.find(t => t.id === typeId).name;
+      const curSamples = samples[typeId] || [];
+      if (curSamples.length === 0) return '';
+      const columns = collectColumns(typeId);
+      if (columns.length === 0) return '';
+
+      let ths = '<th style="border:1px solid #94a3b8;padding:6px 4px;background:#1e40af;color:#fff;font-size:11px;min-width:70px;">油样名称</th>';
+      columns.forEach(col => {
+        let label = col.name;
+        if (col.unit) label += `<br><span style="font-weight:400;opacity:0.85;font-size:9px;">${col.unit}</span>`;
+        if (col.parentName) {
+          label += `<br><span style="font-weight:400;opacity:0.75;font-size:8px;background:rgba(255,255,255,0.15);padding:1px 3px;border-radius:2px;">${col.parentName}</span>`;
+        }
+        ths += `<th style="border:1px solid #94a3b8;padding:6px 4px;background:#1e40af;color:#fff;font-size:10px;">${label}</th>`;
+      });
+
+      let rows = curSamples.map((s, idx) => {
+        const name = s.name.trim() || `油样 ${idx + 1}`;
+        let tds = `<td style="border:1px solid #cbd5e1;padding:6px 4px;font-weight:600;background:#f8fafc;font-size:11px;">${name}</td>`;
+        columns.forEach(col => {
+          let val = '—';
+          if (col.parentKey) {
+            const t = s.tests[col.parentKey];
+            if (t && t.checked && t.children) val = String(t.children[col.key] || '').trim() || '—';
+          } else {
+            const t = s.tests[col.key];
+            if (t && t.checked) val = String(t.value || '').trim() || '—';
+          }
+          tds += `<td style="border:1px solid #cbd5e1;padding:6px 4px;text-align:center;font-size:11px;">${val}</td>`;
+        });
+        return `<tr>${tds}</tr>`;
+      }).join('');
+
+      return `
+        <div style="margin-bottom:16px;">
+          <div style="font-size:13px;font-weight:600;color:#1e40af;margin-bottom:6px;">${typeName}</div>
+          <table style="width:100%;border-collapse:collapse;font-size:11px;">
+            <thead><tr>${ths}</tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function doExportPDF() {
+      const clientName = document.getElementById('clientName').value.trim();
+      if (!clientName) {
+        alert('请填写委托方名称');
+        document.getElementById('clientName').focus();
+        return;
+      }
+      closeExportModal();
+
+      saveToHistory(clientName);
+      editingHistoryId = null;
+      saveState();
+      updateRestoreBanner();
+
+      let sections = OIL_TYPES.map(t => buildSectionHTML(t.id)).join('');
+      const html = `
+        <div style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;padding:16px 12px;color:#1e293b;">
+          <div style="text-align:center;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #1e40af;">
+            <div style="font-size:16px;font-weight:700;color:#1e40af;">${escapeAttr(clientName)}</div>
+            <div style="font-size:12px;color:#64748b;margin-top:4px;">油样检测结果汇总</div>
+          </div>
+          ${sections}
+        </div>
+      `;
+
+      const area = document.getElementById('pdf-area');
+      area.innerHTML = html;
+      area.style.display = 'block';
+
+      const filename = `${clientName}_油样检测汇总.pdf`;
+      const opt = {
+        margin: [8, 6, 8, 6],
+        filename,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+      };
+
+      html2pdf().set(opt).from(area).save().then(() => {
+        area.style.display = 'none';
+        area.innerHTML = '';
+      }).catch(err => {
+        console.error(err);
+        const win = window.open('', '_blank');
+        win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>汇总预览</title></head>
+          <body>${html}
+          <div style="text-align:center;margin:20px;">
+            <button onclick="window.print()" style="padding:10px 24px;font-size:15px;cursor:pointer;">打印 / 另存为 PDF</button>
+          </div></body></html>`);
+        win.document.close();
+        area.style.display = 'none';
+        area.innerHTML = '';
+      });
+    }
+
+    loadState();
+    renderAll();
+  </script>
+</body>
+</html>
