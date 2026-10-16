@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>油样检测数据汇总</title>
-  <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <style id="print-fix">
     @media print {
       body * { visibility: hidden !important; }
@@ -295,7 +295,7 @@
     </div>
 
     <div class="toolbar">
-      <button type="button" class="btn-success" onclick="openExportModal()">导出汇总 PDF</button>
+      <button type="button" class="btn-success" onclick="openExportModal()">导出汇总图片</button>
       <button type="button" class="btn-secondary btn-sm" onclick="clearCurrentSamples()">清空当前油类油样</button>
       <button type="button" class="btn-outline btn-sm" onclick="toggleHistory()">历史记录</button>
     </div>
@@ -328,7 +328,7 @@
       <input type="text" id="clientName" placeholder="请输入委托方名称" />
       <div class="modal-actions">
         <button type="button" class="btn-secondary" onclick="closeExportModal()">取消</button>
-        <button type="button" class="btn-success" onclick="doExportPDF()">生成 PDF</button>
+        <button type="button" class="btn-success" onclick="doExportPDF()">生成图片</button>
       </div>
     </div>
   </div>
@@ -1084,7 +1084,7 @@
 
       overlay.innerHTML = `
         <div style="position:sticky;top:0;background:#fff;border-bottom:1px solid #e2e8f0;padding:12px;z-index:2;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center;">
-          <button type="button" id="btn-pdf-download" style="padding:12px 28px;font-size:16px;font-weight:600;background:#059669;color:#fff;border:none;border-radius:8px;">下载 PDF</button>
+          <button type="button" id="btn-pdf-download" style="padding:12px 28px;font-size:16px;font-weight:600;background:#059669;color:#fff;border:none;border-radius:8px;">下载图片</button>
           <button type="button" id="btn-pdf-close" style="padding:12px 20px;font-size:15px;background:#e2e8f0;color:#334155;border:none;border-radius:8px;">关闭</button>
         </div>
         <div id="pdf-preview-content" style="background:#fff;margin:12px auto;padding:16px 12px;max-width:1100px;color:#1e293b;font-family:'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif;">
@@ -1116,20 +1116,20 @@
         alert('预览内容丢失，请关闭后重新导出');
         return;
       }
-      if (typeof html2pdf !== 'function') {
-        alert('PDF 组件未加载，请检查网络后刷新页面重试');
+      if (typeof html2canvas !== 'function') {
+        alert('截图组件未加载，请检查网络后刷新页面重试');
         return;
       }
 
       const oldText = btn.textContent;
-      btn.textContent = '正在生成…';
+      btn.textContent = '正在生成图片…';
       btn.disabled = true;
 
-      const filename = clientName + '_油样检测汇总.pdf';
+      const filename = clientName + '_油样检测汇总.png';
 
-      // 克隆到页面顶部完整展开，避免只截到屏幕可见区域
+      // 克隆完整内容，避免只截屏幕可见区域
       const clone = content.cloneNode(true);
-      clone.id = 'pdf-capture-clone';
+      clone.id = 'img-capture-clone';
       clone.style.cssText = [
         'position:fixed',
         'left:0',
@@ -1137,19 +1137,16 @@
         'width:1100px',
         'max-width:none',
         'margin:0',
-        'padding:16px 12px',
+        'padding:20px 16px',
         'background:#ffffff',
         'z-index:100001',
         'overflow:visible',
         'box-sizing:border-box'
       ].join(';');
       document.body.appendChild(clone);
-
-      // 强制表格完整显示
       clone.querySelectorAll('table').forEach(function (t) {
         t.style.width = '100%';
         t.style.maxWidth = 'none';
-        t.style.tableLayout = 'auto';
       });
 
       function cleanupClone() {
@@ -1157,60 +1154,83 @@
       }
 
       setTimeout(function () {
-        const fullW = Math.max(clone.scrollWidth, clone.offsetWidth, 1100);
-        const fullH = Math.max(clone.scrollHeight, clone.offsetHeight, 200);
+        const fullW = Math.max(clone.scrollWidth, 1100);
+        const fullH = Math.max(clone.scrollHeight, 200);
 
-        const opt = {
-          margin: [6, 4, 6, 4],
-          filename: filename,
-          image: { type: 'jpeg', quality: 0.95 },
-          html2canvas: {
-            scale: 1.5,
-            useCORS: true,
-            allowTaint: true,
-            logging: false,
-            backgroundColor: '#ffffff',
-            width: fullW,
-            height: fullH,
-            windowWidth: fullW,
-            windowHeight: fullH,
-            scrollX: 0,
-            scrollY: 0,
-            x: 0,
-            y: 0
-          },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-        };
-
-        html2pdf().set(opt).from(clone).outputPdf('blob').then(function (blob) {
+        html2canvas(clone, {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#ffffff',
+          width: fullW,
+          height: fullH,
+          windowWidth: fullW,
+          windowHeight: fullH,
+          scrollX: 0,
+          scrollY: 0,
+          logging: false
+        }).then(function (canvas) {
           cleanupClone();
-          btn.textContent = oldText;
-          btn.disabled = false;
 
-          if (!blob || blob.size < 3000) {
-            alert('生成的 PDF 内容过少，请重试或使用电脑浏览器导出。');
+          if (!canvas || canvas.width < 10 || canvas.height < 10) {
+            btn.textContent = oldText;
+            btn.disabled = false;
+            alert('生成图片失败，请重试');
             return;
           }
 
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = filename;
-          a.rel = 'noopener';
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          setTimeout(function () { URL.revokeObjectURL(url); }, 3000);
+          // 优先用 toBlob 下载
+          function triggerDownload(blob) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.rel = 'noopener';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(function () { URL.revokeObjectURL(url); }, 3000);
+            btn.textContent = '图片已下载';
+            btn.disabled = false;
+            setTimeout(function () { btn.textContent = oldText; }, 2000);
+          }
 
-          btn.textContent = '已开始下载';
-          setTimeout(function () { btn.textContent = oldText; }, 2000);
+          if (canvas.toBlob) {
+            canvas.toBlob(function (blob) {
+              if (!blob) {
+                // 降级 dataURL
+                const dataUrl = canvas.toDataURL('image/png');
+                const a = document.createElement('a');
+                a.href = dataUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                btn.textContent = '图片已下载';
+                btn.disabled = false;
+                setTimeout(function () { btn.textContent = oldText; }, 2000);
+                return;
+              }
+              triggerDownload(blob);
+            }, 'image/png');
+          } else {
+            const dataUrl = canvas.toDataURL('image/png');
+            const a = document.createElement('a');
+            a.href = dataUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            btn.textContent = '图片已下载';
+            btn.disabled = false;
+            setTimeout(function () { btn.textContent = oldText; }, 2000);
+          }
         }).catch(function (err) {
           console.error(err);
           cleanupClone();
           btn.textContent = oldText;
           btn.disabled = false;
-          alert('PDF 生成失败：' + (err && err.message ? err.message : '未知错误'));
+          alert('生成图片失败：' + (err && err.message ? err.message : '未知错误'));
         });
       }, 300);
     }
