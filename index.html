@@ -1069,117 +1069,115 @@
         return;
       }
 
-      const htmlBody = `
-        <div id="pdf-print-root" style="font-family:'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif;padding:16px 12px;color:#1e293b;background:#fff;width:1100px;">
+      // 先显示预览，用户确认后再点下载
+      showPdfPreview(clientName, sections);
+    }
+
+    function showPdfPreview(clientName, sections) {
+      let overlay = document.getElementById('pdf-overlay');
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'pdf-overlay';
+        document.body.appendChild(overlay);
+      }
+      overlay.style.cssText = 'position:fixed;inset:0;background:#f1f5f9;z-index:100000;overflow:auto;-webkit-overflow-scrolling:touch;';
+
+      overlay.innerHTML = `
+        <div style="position:sticky;top:0;background:#fff;border-bottom:1px solid #e2e8f0;padding:12px;z-index:2;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center;">
+          <button type="button" id="btn-pdf-download" style="padding:12px 28px;font-size:16px;font-weight:600;background:#059669;color:#fff;border:none;border-radius:8px;">下载 PDF</button>
+          <button type="button" id="btn-pdf-close" style="padding:12px 20px;font-size:15px;background:#e2e8f0;color:#334155;border:none;border-radius:8px;">关闭</button>
+        </div>
+        <div id="pdf-preview-content" style="background:#fff;margin:12px auto;padding:16px 12px;max-width:1100px;color:#1e293b;font-family:'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif;">
           <div style="text-align:center;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #1e40af;">
             <div style="font-size:18px;font-weight:700;color:#1e40af;">${escapeAttr(clientName)}</div>
             <div style="font-size:12px;color:#64748b;margin-top:4px;">油样检测结果汇总</div>
           </div>
           ${sections}
         </div>
+        <div style="height:40px;"></div>
       `;
 
-      const area = document.getElementById('pdf-area');
-      area.innerHTML = htmlBody;
-      area.classList.add('pdf-capturing');
-      area.style.cssText = 'position:fixed;left:0;top:0;width:1100px;background:#fff;z-index:99999;opacity:1;';
+      document.getElementById('btn-pdf-close').onclick = function () {
+        overlay.style.display = 'none';
+        overlay.innerHTML = '';
+      };
+      document.getElementById('btn-pdf-download').onclick = function () {
+        downloadPdfFromPreview(clientName);
+      };
+
+      overlay.style.display = 'block';
+      overlay.scrollTop = 0;
+    }
+
+    function downloadPdfFromPreview(clientName) {
+      const content = document.getElementById('pdf-preview-content');
+      const btn = document.getElementById('btn-pdf-download');
+      if (!content) {
+        alert('预览内容丢失，请关闭后重新导出');
+        return;
+      }
+      if (typeof html2pdf !== 'function') {
+        alert('PDF 组件未加载，请检查网络后刷新页面重试');
+        return;
+      }
+
+      const oldText = btn.textContent;
+      btn.textContent = '正在生成…';
+      btn.disabled = true;
 
       const filename = clientName + '_油样检测汇总.pdf';
 
-      function cleanup() {
-        area.classList.remove('pdf-capturing');
-        area.style.cssText = 'position:fixed;left:-9999px;top:0;width:1100px;background:#fff;z-index:-1;pointer-events:none;';
-        area.innerHTML = '';
-      }
+      // 截取当前可见的预览内容（避免隐藏区域导致空白）
+      const opt = {
+        margin: [8, 6, 8, 6],
+        filename: filename,
+        image: { type: 'jpeg', quality: 0.95 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          scrollX: 0,
+          scrollY: -window.scrollY,
+          windowWidth: content.scrollWidth,
+          windowHeight: content.scrollHeight
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+      };
 
-      function showSamePagePreview() {
-        cleanup();
-        let overlay = document.getElementById('pdf-overlay');
-        if (!overlay) {
-          overlay = document.createElement('div');
-          overlay.id = 'pdf-overlay';
-          overlay.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:100000;overflow:auto;padding:12px;';
-          document.body.appendChild(overlay);
-        }
-        overlay.innerHTML = `
-          <div style="max-width:100%;margin:0 auto;">
-            ${htmlBody.replace('width:1100px', 'width:100%;max-width:1100px')}
-            <div style="text-align:center;margin:20px 0 40px;position:sticky;bottom:0;background:#fff;padding:12px;">
-              <p style="font-size:13px;color:#64748b;margin-bottom:10px;">若未自动下载，请再点一次下方按钮</p>
-              <button type="button" id="btn-pdf-retry" style="padding:12px 24px;font-size:16px;background:#059669;color:#fff;border:none;border-radius:8px;margin:4px;">重新生成 PDF</button>
-              <button type="button" id="btn-pdf-close" style="padding:12px 24px;font-size:16px;background:#e2e8f0;color:#334155;border:none;border-radius:8px;margin:4px;">关闭</button>
-            </div>
-          </div>
-        `;
-        overlay.style.display = 'block';
-        document.getElementById('btn-pdf-close').onclick = function () {
-          overlay.style.display = 'none';
-          overlay.innerHTML = '';
-        };
-        document.getElementById('btn-pdf-retry').onclick = function () {
-          overlay.style.display = 'none';
-          overlay.innerHTML = '';
-          // 重新走生成流程
-          document.getElementById('clientName').value = clientName;
-          doExportPDFCore(clientName, sections, htmlBody, filename);
-        };
-      }
+      // 稍等一帧，确保按钮状态已渲染
+      setTimeout(function () {
+        html2pdf().set(opt).from(content).outputPdf('blob').then(function (blob) {
+          btn.textContent = oldText;
+          btn.disabled = false;
 
-      function doExportPDFCore(clientName, sections, htmlBody, filename) {
-        const area2 = document.getElementById('pdf-area');
-        area2.innerHTML = htmlBody;
-        area2.style.cssText = 'position:fixed;left:0;top:0;width:1100px;background:#fff;z-index:99999;opacity:1;';
-        if (typeof html2pdf !== 'function') {
-          alert('PDF 组件加载失败，请检查网络后刷新页面重试');
-          cleanup();
-          return;
-        }
-        const opt = {
-          margin: [6, 4, 6, 4],
-          filename: filename,
-          pagebreak: { mode: ['css', 'legacy'] },
-          image: { type: 'jpeg', quality: 0.95 },
-          html2canvas: {
-            scale: 1.5,
-            useCORS: true,
-            allowTaint: true,
-            logging: false,
-            backgroundColor: '#ffffff',
-            width: 1100,
-            windowWidth: 1100,
-            scrollX: 0,
-            scrollY: 0
-          },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
-        };
-        setTimeout(function () {
-          html2pdf().set(opt).from(area2).outputPdf('blob').then(function (blob) {
-            cleanup();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            a.style.display = 'none';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
-            // 提示
-            const tip = document.createElement('div');
-            tip.style.cssText = 'position:fixed;left:50%;top:20%;transform:translateX(-50%);background:#059669;color:#fff;padding:14px 22px;border-radius:10px;z-index:100001;font-size:15px;box-shadow:0 4px 20px rgba(0,0,0,0.2);';
-            tip.textContent = 'PDF 已生成，请查看手机下载目录';
-            document.body.appendChild(tip);
-            setTimeout(function () { tip.remove(); }, 3000);
-          }).catch(function (err) {
-            console.error(err);
-            cleanup();
-            showSamePagePreview();
-            alert('自动下载失败，已显示预览。可点「重新生成 PDF」再试。');
-          });
-        }, 500);
-      }
+          // 检查是否几乎空白（文件过小）
+          if (!blob || blob.size < 2000) {
+            alert('生成的 PDF 可能是空白。请尝试：1）用电脑打开本网页再导出；2）或长按预览表格截图保存。');
+            return;
+          }
 
-      doExportPDFCore(clientName, sections, htmlBody, filename);
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          a.rel = 'noopener';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(function () { URL.revokeObjectURL(url); }, 3000);
+
+          btn.textContent = '已开始下载';
+          setTimeout(function () { btn.textContent = oldText; }, 2000);
+        }).catch(function (err) {
+          console.error(err);
+          btn.textContent = oldText;
+          btn.disabled = false;
+          alert('PDF 生成失败：' + (err && err.message ? err.message : '未知错误') + '。建议使用电脑浏览器打开本站再导出。');
+        });
+      }, 200);
     }
 
     loadState();
