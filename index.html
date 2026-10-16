@@ -4,7 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>油样检测数据汇总</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+  <style id="print-fix">
+    @media print {
+      body * { visibility: hidden !important; }
+      #pdf-print-root, #pdf-print-root * { visibility: visible !important; }
+      #pdf-print-root { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; }
+    }
+  </style>
   <style>
     :root {
       --primary: #1a56db;
@@ -234,7 +241,21 @@
     .modal input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,86,219,0.12); }
     .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
 
-    #pdf-area { display: none; }
+    #pdf-area {
+      position: fixed;
+      left: -9999px;
+      top: 0;
+      width: 1100px;
+      background: #fff;
+      z-index: -1;
+      pointer-events: none;
+    }
+    #pdf-area.pdf-capturing {
+      left: 0;
+      top: 0;
+      z-index: 99999;
+      pointer-events: none;
+    }
 
     @media (max-width: 600px) {
       header h1 { font-size: 1.25rem; }
@@ -1009,8 +1030,13 @@
       updateRestoreBanner();
 
       let sections = OIL_TYPES.map(t => buildSectionHTML(t.id)).join('');
-      const html = `
-        <div style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;padding:16px 12px;color:#1e293b;">
+      if (!sections || !sections.trim()) {
+        alert('没有可导出的检测数据，请先勾选项目并填写结果');
+        return;
+      }
+
+      const htmlBody = `
+        <div id="pdf-print-root" style="font-family:'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif;padding:16px 12px;color:#1e293b;background:#fff;">
           <div style="text-align:center;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #1e40af;">
             <div style="font-size:16px;font-weight:700;color:#1e40af;">${escapeAttr(clientName)}</div>
             <div style="font-size:12px;color:#64748b;margin-top:4px;">油样检测结果汇总</div>
@@ -1020,33 +1046,81 @@
       `;
 
       const area = document.getElementById('pdf-area');
-      area.innerHTML = html;
-      area.style.display = 'block';
+      area.innerHTML = htmlBody;
+      area.classList.add('pdf-capturing');
+      area.style.left = '0';
+      area.style.top = '0';
+      area.style.zIndex = '99999';
 
       const filename = `${clientName}_油样检测汇总.pdf`;
+
+      // 优先用 html2pdf；失败或手机端空白时改用打印另存为 PDF
+      const tryHtml2Pdf = typeof html2pdf === 'function';
+
+      function fallbackPrint() {
+        area.classList.remove('pdf-capturing');
+        area.style.left = '-9999px';
+        area.style.zIndex = '-1';
+        const win = window.open('', '_blank');
+        if (!win) {
+          alert('浏览器拦截了弹窗。请允许弹窗后重试，或使用电脑端浏览器导出。');
+          area.innerHTML = '';
+          return;
+        }
+        win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+          <title>${escapeAttr(clientName)} - 油样检测汇总</title>
+          <style>
+            body { margin: 12px; font-family: "PingFang SC","Microsoft YaHei",sans-serif; color: #1e293b; }
+            table { border-collapse: collapse; width: 100%; }
+            th, td { border: 1px solid #94a3b8; padding: 6px 4px; font-size: 11px; }
+            th { background: #1e40af; color: #fff; }
+            @media print { body { margin: 0; } .no-print { display: none !important; } }
+          </style>
+          </head><body>
+          ${htmlBody}
+          <div class="no-print" style="text-align:center;margin:24px;">
+            <p style="margin-bottom:12px;color:#64748b;font-size:14px;">请点击下方按钮，在打印对话框中选择「另存为 PDF」或「Save as PDF」</p>
+            <button onclick="window.print()" style="padding:12px 28px;font-size:16px;cursor:pointer;background:#1a56db;color:#fff;border:none;border-radius:8px;">打印 / 另存为 PDF</button>
+          </div>
+          </body></html>`);
+        win.document.close();
+        area.innerHTML = '';
+      }
+
+      if (!tryHtml2Pdf) {
+        fallbackPrint();
+        return;
+      }
+
       const opt = {
         margin: [8, 6, 8, 6],
         filename,
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
         image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: false },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          width: 1100,
+          windowWidth: 1100
+        },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
       };
 
-      html2pdf().set(opt).from(area).save().then(() => {
-        area.style.display = 'none';
-        area.innerHTML = '';
-      }).catch(err => {
-        console.error(err);
-        const win = window.open('', '_blank');
-        win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>汇总预览</title></head>
-          <body>${html}
-          <div style="text-align:center;margin:20px;">
-            <button onclick="window.print()" style="padding:10px 24px;font-size:15px;cursor:pointer;">打印 / 另存为 PDF</button>
-          </div></body></html>`);
-        win.document.close();
-        area.style.display = 'none';
-        area.innerHTML = '';
-      });
+      // 等浏览器完成布局再截图，避免空白页
+      setTimeout(function () {
+        html2pdf().set(opt).from(area).save().then(function () {
+          area.classList.remove('pdf-capturing');
+          area.style.left = '-9999px';
+          area.style.zIndex = '-1';
+          area.innerHTML = '';
+        }).catch(function (err) {
+          console.error(err);
+          fallbackPrint();
+        });
+      }, 400);
     }
 
     loadState();
