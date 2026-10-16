@@ -951,46 +951,76 @@
       const curSamples = samples[typeId] || [];
       const curItems = items[typeId] || [];
       const normal = [];
-      const gasRelated = [];
+      const groups = []; // { parentName, parentKey, cols: [...] }
 
       curItems.forEach(item => {
         const anyChecked = curSamples.some(s => s.tests[item.key] && s.tests[item.key].checked);
         if (!anyChecked) return;
-        const isGas = item.key === 'gas_content_pct' || item.key === 'gas_content_comp' || item.key === 'dga';
-        if (item.type === 'group') {
+        const isGasGroup = item.key === 'gas_content_comp' || item.key === 'dga';
+        if (item.type === 'group' && isGasGroup) {
+          const cols = (item.children || []).map(c => ({
+            key: c.key, name: c.name, unit: c.unit, parentKey: item.key, parentName: item.name
+          }));
+          if (cols.length) groups.push({ parentName: item.name, parentKey: item.key, cols });
+        } else if (item.type === 'group') {
           (item.children || []).forEach(c => {
-            const col = { key: c.key, name: c.name, unit: c.unit, parentKey: item.key, parentName: item.name };
-            if (isGas) gasRelated.push(col); else normal.push(col);
+            normal.push({ key: c.key, name: c.name, unit: c.unit, parentKey: item.key, parentName: item.name });
           });
         } else {
-          const col = { key: item.key, name: item.name, unit: item.unit };
-          if (isGas) gasRelated.push(col); else normal.push(col);
+          normal.push({ key: item.key, name: item.name, unit: item.unit });
         }
       });
-      return normal.concat(gasRelated);
+      // 油中含气量（简单百分比）放在含气量组分前
+      const gasPctIdx = normal.findIndex(c => c.key === 'gas_content_pct');
+      let gasPct = null;
+      if (gasPctIdx >= 0) gasPct = normal.splice(gasPctIdx, 1)[0];
+      return { normal, gasPct, groups };
     }
 
     function buildSectionHTML(typeId) {
       const typeName = OIL_TYPES.find(t => t.id === typeId).name;
       const curSamples = samples[typeId] || [];
       if (curSamples.length === 0) return '';
-      const columns = collectColumns(typeId);
-      if (columns.length === 0) return '';
+      const { normal, gasPct, groups } = collectColumns(typeId);
+      const flatCols = normal.slice();
+      if (gasPct) flatCols.push(gasPct);
+      groups.forEach(g => g.cols.forEach(c => flatCols.push(c)));
+      if (flatCols.length === 0) return '';
 
-      let ths = '<th style="border:1px solid #94a3b8;padding:6px 4px;background:#1e40af;color:#fff;font-size:11px;min-width:70px;">油样名称</th>';
-      columns.forEach(col => {
+      // 第一行表头：普通列 + 分组大标题（colspan）
+      let th1 = '<th rowspan="2" style="border:1px solid #94a3b8;padding:6px 4px;background:#1e40af;color:#fff;font-size:11px;min-width:70px;vertical-align:middle;">油样名称</th>';
+      normal.forEach(col => {
         let label = col.name;
-        if (col.unit) label += `<br><span style="font-weight:400;opacity:0.85;font-size:9px;">${col.unit}</span>`;
-        if (col.parentName) {
-          label += `<br><span style="font-weight:400;opacity:0.75;font-size:8px;background:rgba(255,255,255,0.15);padding:1px 3px;border-radius:2px;">${col.parentName}</span>`;
-        }
-        ths += `<th style="border:1px solid #94a3b8;padding:6px 4px;background:#1e40af;color:#fff;font-size:10px;">${label}</th>`;
+        if (col.unit) label += '<br><span style="font-weight:400;opacity:0.85;font-size:9px;">' + col.unit + '</span>';
+        th1 += '<th rowspan="2" style="border:1px solid #94a3b8;padding:6px 4px;background:#1e40af;color:#fff;font-size:10px;vertical-align:middle;">' + label + '</th>';
+      });
+      if (gasPct) {
+        let label = gasPct.name;
+        if (gasPct.unit) label += '<br><span style="font-weight:400;opacity:0.85;font-size:9px;">' + gasPct.unit + '</span>';
+        th1 += '<th rowspan="2" style="border:1px solid #94a3b8;padding:6px 4px;background:#1e40af;color:#fff;font-size:10px;vertical-align:middle;">' + label + '</th>';
+      }
+      // 分组大标题颜色区分
+      const groupColors = ['#1d4ed8', '#0f766e'];
+      groups.forEach((g, gi) => {
+        const bg = groupColors[gi % groupColors.length];
+        th1 += '<th colspan="' + g.cols.length + '" style="border:1px solid #94a3b8;padding:8px 4px;background:' + bg + ';color:#fff;font-size:12px;font-weight:700;text-align:center;">' + g.parentName + '</th>';
+      });
+
+      // 第二行表头：仅分组的子项
+      let th2 = '';
+      groups.forEach((g, gi) => {
+        const bg = groupColors[gi % groupColors.length];
+        g.cols.forEach(col => {
+          let label = col.name;
+          if (col.unit) label += '<br><span style="font-weight:400;opacity:0.9;font-size:9px;">' + col.unit + '</span>';
+          th2 += '<th style="border:1px solid #94a3b8;padding:5px 3px;background:' + bg + ';color:#fff;font-size:10px;">' + label + '</th>';
+        });
       });
 
       let rows = curSamples.map((s, idx) => {
-        const name = s.name.trim() || `油样 ${idx + 1}`;
-        let tds = `<td style="border:1px solid #cbd5e1;padding:6px 4px;font-weight:600;background:#f8fafc;font-size:11px;">${name}</td>`;
-        columns.forEach(col => {
+        const name = s.name.trim() || ('油样 ' + (idx + 1));
+        let tds = '<td style="border:1px solid #cbd5e1;padding:6px 4px;font-weight:600;background:#f8fafc;font-size:11px;">' + name + '</td>';
+        flatCols.forEach(col => {
           let val = '—';
           if (col.parentKey) {
             const t = s.tests[col.parentKey];
@@ -999,16 +1029,20 @@
             const t = s.tests[col.key];
             if (t && t.checked) val = String(t.value || '').trim() || '—';
           }
-          tds += `<td style="border:1px solid #cbd5e1;padding:6px 4px;text-align:center;font-size:11px;">${val}</td>`;
+          tds += '<td style="border:1px solid #cbd5e1;padding:6px 4px;text-align:center;font-size:11px;">' + val + '</td>';
         });
-        return `<tr>${tds}</tr>`;
+        return '<tr>' + tds + '</tr>';
       }).join('');
 
+      const hasGroup = groups.length > 0;
       return `
         <div style="margin-bottom:16px;">
           <div style="font-size:13px;font-weight:600;color:#1e40af;margin-bottom:6px;">${typeName}</div>
           <table style="width:100%;border-collapse:collapse;font-size:11px;">
-            <thead><tr>${ths}</tr></thead>
+            <thead>
+              <tr>${th1}</tr>
+              ${hasGroup ? '<tr>' + th2 + '</tr>' : ''}
+            </thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
@@ -1036,9 +1070,9 @@
       }
 
       const htmlBody = `
-        <div id="pdf-print-root" style="font-family:'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif;padding:16px 12px;color:#1e293b;background:#fff;">
+        <div id="pdf-print-root" style="font-family:'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif;padding:16px 12px;color:#1e293b;background:#fff;width:1100px;">
           <div style="text-align:center;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #1e40af;">
-            <div style="font-size:16px;font-weight:700;color:#1e40af;">${escapeAttr(clientName)}</div>
+            <div style="font-size:18px;font-weight:700;color:#1e40af;">${escapeAttr(clientName)}</div>
             <div style="font-size:12px;color:#64748b;margin-top:4px;">油样检测结果汇总</div>
           </div>
           ${sections}
@@ -1048,79 +1082,104 @@
       const area = document.getElementById('pdf-area');
       area.innerHTML = htmlBody;
       area.classList.add('pdf-capturing');
-      area.style.left = '0';
-      area.style.top = '0';
-      area.style.zIndex = '99999';
+      area.style.cssText = 'position:fixed;left:0;top:0;width:1100px;background:#fff;z-index:99999;opacity:1;';
 
-      const filename = `${clientName}_油样检测汇总.pdf`;
+      const filename = clientName + '_油样检测汇总.pdf';
 
-      // 优先用 html2pdf；失败或手机端空白时改用打印另存为 PDF
-      const tryHtml2Pdf = typeof html2pdf === 'function';
-
-      function fallbackPrint() {
+      function cleanup() {
         area.classList.remove('pdf-capturing');
-        area.style.left = '-9999px';
-        area.style.zIndex = '-1';
-        const win = window.open('', '_blank');
-        if (!win) {
-          alert('浏览器拦截了弹窗。请允许弹窗后重试，或使用电脑端浏览器导出。');
-          area.innerHTML = '';
-          return;
-        }
-        win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-          <title>${escapeAttr(clientName)} - 油样检测汇总</title>
-          <style>
-            body { margin: 12px; font-family: "PingFang SC","Microsoft YaHei",sans-serif; color: #1e293b; }
-            table { border-collapse: collapse; width: 100%; }
-            th, td { border: 1px solid #94a3b8; padding: 6px 4px; font-size: 11px; }
-            th { background: #1e40af; color: #fff; }
-            @media print { body { margin: 0; } .no-print { display: none !important; } }
-          </style>
-          </head><body>
-          ${htmlBody}
-          <div class="no-print" style="text-align:center;margin:24px;">
-            <p style="margin-bottom:12px;color:#64748b;font-size:14px;">请点击下方按钮，在打印对话框中选择「另存为 PDF」或「Save as PDF」</p>
-            <button onclick="window.print()" style="padding:12px 28px;font-size:16px;cursor:pointer;background:#1a56db;color:#fff;border:none;border-radius:8px;">打印 / 另存为 PDF</button>
-          </div>
-          </body></html>`);
-        win.document.close();
+        area.style.cssText = 'position:fixed;left:-9999px;top:0;width:1100px;background:#fff;z-index:-1;pointer-events:none;';
         area.innerHTML = '';
       }
 
-      if (!tryHtml2Pdf) {
-        fallbackPrint();
-        return;
+      function showSamePagePreview() {
+        cleanup();
+        let overlay = document.getElementById('pdf-overlay');
+        if (!overlay) {
+          overlay = document.createElement('div');
+          overlay.id = 'pdf-overlay';
+          overlay.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:100000;overflow:auto;padding:12px;';
+          document.body.appendChild(overlay);
+        }
+        overlay.innerHTML = `
+          <div style="max-width:100%;margin:0 auto;">
+            ${htmlBody.replace('width:1100px', 'width:100%;max-width:1100px')}
+            <div style="text-align:center;margin:20px 0 40px;position:sticky;bottom:0;background:#fff;padding:12px;">
+              <p style="font-size:13px;color:#64748b;margin-bottom:10px;">若未自动下载，请再点一次下方按钮</p>
+              <button type="button" id="btn-pdf-retry" style="padding:12px 24px;font-size:16px;background:#059669;color:#fff;border:none;border-radius:8px;margin:4px;">重新生成 PDF</button>
+              <button type="button" id="btn-pdf-close" style="padding:12px 24px;font-size:16px;background:#e2e8f0;color:#334155;border:none;border-radius:8px;margin:4px;">关闭</button>
+            </div>
+          </div>
+        `;
+        overlay.style.display = 'block';
+        document.getElementById('btn-pdf-close').onclick = function () {
+          overlay.style.display = 'none';
+          overlay.innerHTML = '';
+        };
+        document.getElementById('btn-pdf-retry').onclick = function () {
+          overlay.style.display = 'none';
+          overlay.innerHTML = '';
+          // 重新走生成流程
+          document.getElementById('clientName').value = clientName;
+          doExportPDFCore(clientName, sections, htmlBody, filename);
+        };
       }
 
-      const opt = {
-        margin: [8, 6, 8, 6],
-        filename,
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          allowTaint: true,
-          logging: false,
-          backgroundColor: '#ffffff',
-          width: 1100,
-          windowWidth: 1100
-        },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
-      };
+      function doExportPDFCore(clientName, sections, htmlBody, filename) {
+        const area2 = document.getElementById('pdf-area');
+        area2.innerHTML = htmlBody;
+        area2.style.cssText = 'position:fixed;left:0;top:0;width:1100px;background:#fff;z-index:99999;opacity:1;';
+        if (typeof html2pdf !== 'function') {
+          alert('PDF 组件加载失败，请检查网络后刷新页面重试');
+          cleanup();
+          return;
+        }
+        const opt = {
+          margin: [6, 4, 6, 4],
+          filename: filename,
+          pagebreak: { mode: ['css', 'legacy'] },
+          image: { type: 'jpeg', quality: 0.95 },
+          html2canvas: {
+            scale: 1.5,
+            useCORS: true,
+            allowTaint: true,
+            logging: false,
+            backgroundColor: '#ffffff',
+            width: 1100,
+            windowWidth: 1100,
+            scrollX: 0,
+            scrollY: 0
+          },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+        };
+        setTimeout(function () {
+          html2pdf().set(opt).from(area2).outputPdf('blob').then(function (blob) {
+            cleanup();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+            // 提示
+            const tip = document.createElement('div');
+            tip.style.cssText = 'position:fixed;left:50%;top:20%;transform:translateX(-50%);background:#059669;color:#fff;padding:14px 22px;border-radius:10px;z-index:100001;font-size:15px;box-shadow:0 4px 20px rgba(0,0,0,0.2);';
+            tip.textContent = 'PDF 已生成，请查看手机下载目录';
+            document.body.appendChild(tip);
+            setTimeout(function () { tip.remove(); }, 3000);
+          }).catch(function (err) {
+            console.error(err);
+            cleanup();
+            showSamePagePreview();
+            alert('自动下载失败，已显示预览。可点「重新生成 PDF」再试。');
+          });
+        }, 500);
+      }
 
-      // 等浏览器完成布局再截图，避免空白页
-      setTimeout(function () {
-        html2pdf().set(opt).from(area).save().then(function () {
-          area.classList.remove('pdf-capturing');
-          area.style.left = '-9999px';
-          area.style.zIndex = '-1';
-          area.innerHTML = '';
-        }).catch(function (err) {
-          console.error(err);
-          fallbackPrint();
-        });
-      }, 400);
+      doExportPDFCore(clientName, sections, htmlBody, filename);
     }
 
     loadState();
