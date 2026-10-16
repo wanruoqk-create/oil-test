@@ -1127,35 +1127,69 @@
 
       const filename = clientName + '_油样检测汇总.pdf';
 
-      // 截取当前可见的预览内容（避免隐藏区域导致空白）
-      const opt = {
-        margin: [8, 6, 8, 6],
-        filename: filename,
-        image: { type: 'jpeg', quality: 0.95 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          allowTaint: true,
-          logging: false,
-          backgroundColor: '#ffffff',
-          scrollX: 0,
-          scrollY: -window.scrollY,
-          windowWidth: content.scrollWidth,
-          windowHeight: content.scrollHeight
-        },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-      };
+      // 克隆到页面顶部完整展开，避免只截到屏幕可见区域
+      const clone = content.cloneNode(true);
+      clone.id = 'pdf-capture-clone';
+      clone.style.cssText = [
+        'position:fixed',
+        'left:0',
+        'top:0',
+        'width:1100px',
+        'max-width:none',
+        'margin:0',
+        'padding:16px 12px',
+        'background:#ffffff',
+        'z-index:100001',
+        'overflow:visible',
+        'box-sizing:border-box'
+      ].join(';');
+      document.body.appendChild(clone);
 
-      // 稍等一帧，确保按钮状态已渲染
+      // 强制表格完整显示
+      clone.querySelectorAll('table').forEach(function (t) {
+        t.style.width = '100%';
+        t.style.maxWidth = 'none';
+        t.style.tableLayout = 'auto';
+      });
+
+      function cleanupClone() {
+        if (clone && clone.parentNode) clone.parentNode.removeChild(clone);
+      }
+
       setTimeout(function () {
-        html2pdf().set(opt).from(content).outputPdf('blob').then(function (blob) {
+        const fullW = Math.max(clone.scrollWidth, clone.offsetWidth, 1100);
+        const fullH = Math.max(clone.scrollHeight, clone.offsetHeight, 200);
+
+        const opt = {
+          margin: [6, 4, 6, 4],
+          filename: filename,
+          image: { type: 'jpeg', quality: 0.95 },
+          html2canvas: {
+            scale: 1.5,
+            useCORS: true,
+            allowTaint: true,
+            logging: false,
+            backgroundColor: '#ffffff',
+            width: fullW,
+            height: fullH,
+            windowWidth: fullW,
+            windowHeight: fullH,
+            scrollX: 0,
+            scrollY: 0,
+            x: 0,
+            y: 0
+          },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+        };
+
+        html2pdf().set(opt).from(clone).outputPdf('blob').then(function (blob) {
+          cleanupClone();
           btn.textContent = oldText;
           btn.disabled = false;
 
-          // 检查是否几乎空白（文件过小）
-          if (!blob || blob.size < 2000) {
-            alert('生成的 PDF 可能是空白。请尝试：1）用电脑打开本网页再导出；2）或长按预览表格截图保存。');
+          if (!blob || blob.size < 3000) {
+            alert('生成的 PDF 内容过少，请重试或使用电脑浏览器导出。');
             return;
           }
 
@@ -1173,11 +1207,12 @@
           setTimeout(function () { btn.textContent = oldText; }, 2000);
         }).catch(function (err) {
           console.error(err);
+          cleanupClone();
           btn.textContent = oldText;
           btn.disabled = false;
-          alert('PDF 生成失败：' + (err && err.message ? err.message : '未知错误') + '。建议使用电脑浏览器打开本站再导出。');
+          alert('PDF 生成失败：' + (err && err.message ? err.message : '未知错误'));
         });
-      }, 200);
+      }, 300);
     }
 
     loadState();
