@@ -351,6 +351,7 @@
       transformer: [
         { key: 'appearance', name: '外观', unit: '', type: 'simple' },
         { key: 'color', name: '颜色', unit: '', type: 'simple' },
+        { key: 'chroma', name: '色度', unit: '', type: 'simple' },
         { key: 'density', name: '密度(20℃)', unit: 'kg/m³', type: 'simple' },
         { key: 'viscosity', name: '运动粘度(40℃)', unit: 'mm²/s', type: 'simple' },
         { key: 'flash_point', name: '闪点（闭口）', unit: '℃', type: 'simple' },
@@ -401,6 +402,7 @@
       turbine: [
         { key: 'appearance', name: '外观', unit: '', type: 'simple' },
         { key: 'color', name: '颜色', unit: '', type: 'simple' },
+        { key: 'chroma', name: '色度', unit: '', type: 'simple' },
         { key: 'density', name: '密度(20℃)', unit: 'kg/m³', type: 'simple' },
         { key: 'viscosity', name: '运动粘度(40℃)', unit: 'mm²/s', type: 'simple' },
         { key: 'viscosity_index', name: '粘度指数', unit: '', type: 'simple' },
@@ -432,6 +434,7 @@
       ],
       fireresistant: [
         { key: 'appearance', name: '外观/颜色', unit: '', type: 'simple' },
+        { key: 'chroma', name: '色度', unit: '', type: 'simple' },
         { key: 'density', name: '密度(20℃)', unit: 'kg/m³', type: 'simple' },
         { key: 'viscosity', name: '运动粘度(40℃)', unit: 'mm²/s', type: 'simple' },
         { key: 'viscosity_index', name: '粘度指数', unit: '', type: 'simple' },
@@ -1043,7 +1046,7 @@
       curItems.forEach(item => {
         const anyChecked = curSamples.some(s => s.tests[item.key] && s.tests[item.key].checked);
         if (!anyChecked) return;
-        const isGasGroup = item.key === 'gas_content_comp' || item.key === 'dga';
+        const isGasGroup = item.key === 'gas_content_comp' || item.key === 'dga' || item.key === 'foam';
         if (item.type === 'group' && isGasGroup) {
           const cols = (item.children || []).map(c => ({
             key: c.key, name: c.name, unit: c.unit, parentKey: item.key, parentName: item.name
